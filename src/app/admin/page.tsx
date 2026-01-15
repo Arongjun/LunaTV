@@ -309,6 +309,7 @@ interface LiveDataSource {
   url: string;
   ua?: string;
   epg?: string;
+  isTvBox?: boolean;
   channelNumber?: number;
   disabled?: boolean;
   from: 'config' | 'custom';
@@ -2531,6 +2532,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
       {/* 删除用户确认弹窗 */}
       {showDeleteUserModal && deletingUser && createPortal(
         <div className='fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4' onClick={() => {
+          // 删除中禁止关闭弹窗
+          if (isLoading(`deleteUser_${deletingUser}`)) return;
           setShowDeleteUserModal(false);
           setDeletingUser(null);
         }}>
@@ -2545,7 +2548,8 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                     setShowDeleteUserModal(false);
                     setDeletingUser(null);
                   }}
-                  className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors'
+                  disabled={isLoading(`deleteUser_${deletingUser}`)}
+                  className='text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
                 >
                   <svg className='w-6 h-6' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
                     <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M6 18L18 6M6 6l12 12' />
@@ -2575,15 +2579,20 @@ const UserConfig = ({ config, role, refreshConfig }: UserConfigProps) => {
                       setShowDeleteUserModal(false);
                       setDeletingUser(null);
                     }}
-                    className={`px-6 py-2.5 text-sm font-medium ${buttonStyles.secondary}`}
+                    disabled={isLoading(`deleteUser_${deletingUser}`)}
+                    className={`px-6 py-2.5 text-sm font-medium ${isLoading(`deleteUser_${deletingUser}`) ? buttonStyles.disabled : buttonStyles.secondary}`}
                   >
                     取消
                   </button>
                   <button
                     onClick={handleConfirmDeleteUser}
-                    className={`px-6 py-2.5 text-sm font-medium ${buttonStyles.danger}`}
+                    disabled={isLoading(`deleteUser_${deletingUser}`)}
+                    className={`px-6 py-2.5 text-sm font-medium flex items-center space-x-2 ${isLoading(`deleteUser_${deletingUser}`) ? buttonStyles.disabled : buttonStyles.danger}`}
                   >
-                    确认删除
+                    {isLoading(`deleteUser_${deletingUser}`) && (
+                      <div className='animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent'></div>
+                    )}
+                    <span>{isLoading(`deleteUser_${deletingUser}`) ? '删除中...' : '确认删除'}</span>
                   </button>
                 </div>
               </div>
@@ -4738,6 +4747,7 @@ const SiteConfigComponent = ({ config, refreshConfig }: { config: AdminConfig | 
       label: '豆瓣 CDN By CMLiussss（腾讯云）',
     },
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
+    { value: 'baidu', label: '百度图片代理（境内CDN，Chrome可能触发下载）' },
     { value: 'custom', label: '自定义代理' },
   ];
 
@@ -5401,6 +5411,7 @@ const LiveSourceConfig = ({
     url: '',
     ua: '',
     epg: '',
+    isTvBox: false,
     disabled: false,
     from: 'custom',
   });
@@ -5505,6 +5516,7 @@ const LiveSourceConfig = ({
         url: newLiveSource.url,
         ua: newLiveSource.ua,
         epg: newLiveSource.epg,
+        isTvBox: newLiveSource.isTvBox,
       });
       setNewLiveSource({
         name: '',
@@ -5512,6 +5524,7 @@ const LiveSourceConfig = ({
         url: '',
         epg: '',
         ua: '',
+        isTvBox: false,
         disabled: false,
         from: 'custom',
       });
@@ -5531,6 +5544,7 @@ const LiveSourceConfig = ({
         url: editingLiveSource.url,
         ua: editingLiveSource.ua,
         epg: editingLiveSource.epg,
+        isTvBox: editingLiveSource.isTvBox,
       });
       setEditingLiveSource(null);
     }).catch(() => {
@@ -5844,6 +5858,31 @@ const LiveSourceConfig = ({
               className='px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
             />
 
+            {/* TVBox 模式开关 */}
+            <div>
+              <label className='block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'>
+                强制识别为 TVBox 源
+              </label>
+              <div className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 flex items-center'>
+                <button
+                  type='button'
+                  onClick={() => setNewLiveSource(prev => ({ ...prev, isTvBox: !prev.isTvBox }))}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${newLiveSource.isTvBox
+                    ? 'bg-purple-600 focus:ring-purple-500'
+                    : 'bg-gray-200 dark:bg-gray-700 focus:ring-gray-500'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${newLiveSource.isTvBox ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                  />
+                </button>
+                <span className='ml-3 text-sm text-gray-500 dark:text-gray-400'>
+                  {newLiveSource.isTvBox ? '已开启' : '已关闭'}
+                </span>
+              </div>
+            </div>
+
           </div>
           <div className='flex justify-end'>
             <button
@@ -5926,7 +5965,7 @@ const LiveSourceConfig = ({
               <label className='block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'>
                 自定义 UA（选填）
               </label>
-              <input
+            <input
                 type='text'
                 value={editingLiveSource.ua}
                 onChange={(e) =>
@@ -5935,7 +5974,33 @@ const LiveSourceConfig = ({
                 className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100'
               />
             </div>
+
+            {/* TVBox 模式开关 (编辑) */}
+            <div>
+              <label className='block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1'>
+                强制识别为 TVBox 源
+              </label>
+              <div className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 flex items-center'>
+                <button
+                  type='button'
+                  onClick={() => setEditingLiveSource(prev => prev ? ({ ...prev, isTvBox: !prev.isTvBox }) : null)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 ${editingLiveSource.isTvBox
+                    ? 'bg-purple-600 focus:ring-purple-500'
+                    : 'bg-gray-200 dark:bg-gray-700 focus:ring-gray-500'
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${editingLiveSource.isTvBox ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                  />
+                </button>
+                <span className='ml-3 text-sm text-gray-500 dark:text-gray-400'>
+                  {editingLiveSource.isTvBox ? '已开启' : '已关闭'}
+                </span>
+              </div>
+            </div>
           </div>
+
           <div className='flex justify-end space-x-2'>
             <button
               onClick={handleCancelEdit}
