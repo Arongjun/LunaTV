@@ -2,6 +2,7 @@
 
 import type { Metadata, Viewport } from 'next';
 import { Inter } from 'next/font/google';
+import nextDynamic from 'next/dynamic';
 import { cookies } from 'next/headers';
 import { Suspense } from 'react';
 import { Toaster } from 'sonner';
@@ -14,19 +15,28 @@ import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { GlobalDOMErrorHandler } from '../components/GlobalDOMErrorHandler';
 import { DOMErrorBoundary } from '../components/DOMErrorBoundary';
 import { ChunkErrorGuard } from '../components/ChunkErrorGuard';
-import { TranslationWarningToast } from '../components/TranslationWarningToast';
 import NavigationShell from '../components/NavigationShell';
-import { SessionTracker } from '../components/SessionTracker';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 import { WatchRoomProvider } from '../components/WatchRoomProvider';
 import { DownloadProvider } from '../contexts/DownloadContext';
 import { GlobalCacheProvider } from '../contexts/GlobalCacheContext';
-import { DownloadPanel } from '../components/download/DownloadPanel';
-import ChatFloatingWindow from '../components/watch-room/ChatFloatingWindow';
 import QueryProvider from '../components/QueryProvider';
 import { CinematicLoadingFallback } from '../components/CinematicLoadingFallback';
-import RouteWarmup from '../components/RouteWarmup';
+
+// 懒加载非关键 UI 组件，减少首屏 JS 体积（代码分割）
+// 未设置 ssr: false，保持服务端渲染兼容性
+const TranslationWarningToast = nextDynamic(() =>
+  import('../components/TranslationWarningToast').then((m) => m.TranslationWarningToast)
+);
+const SessionTracker = nextDynamic(() =>
+  import('../components/SessionTracker').then((m) => m.SessionTracker)
+);
+const RouteWarmup = nextDynamic(() => import('../components/RouteWarmup'));
+const DownloadPanel = nextDynamic(() =>
+  import('../components/download/DownloadPanel').then((m) => m.DownloadPanel)
+);
+const ChatFloatingWindow = nextDynamic(() => import('../components/watch-room/ChatFloatingWindow'));
 
 const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
@@ -81,6 +91,8 @@ export default async function RootLayout({
   let customAdFilterVersion = 0;
   let aiRecommendEnabled = false;
   let embyEnabled = false;
+  let videoProxyEnabled = false;
+  let videoProxyUrl = '';
   let customCategories = [] as {
     name: string;
     type: 'movie' | 'tv';
@@ -113,6 +125,8 @@ export default async function RootLayout({
       config.EmbyConfig.Sources.length > 0 &&
       config.EmbyConfig.Sources.some(s => s.enabled && s.ServerURL)
     );
+    videoProxyEnabled = config.VideoProxyConfig?.enabled ?? false;
+    videoProxyUrl = config.VideoProxyConfig?.proxyUrl || '';
   }
 
   // 将运行时配置注入到全局 window 对象，供客户端在运行时读取
@@ -132,6 +146,8 @@ export default async function RootLayout({
     AI_RECOMMEND_ENABLED: aiRecommendEnabled,
     EMBY_ENABLED: embyEnabled,
     PRIVATE_LIBRARY_ENABLED: embyEnabled,
+    VIDEO_PROXY_ENABLED: videoProxyEnabled,
+    VIDEO_PROXY_URL: videoProxyUrl,
     // 禁用预告片：Vercel 自动检测，或用户手动设置 DISABLE_HERO_TRAILER=true
     DISABLE_HERO_TRAILER: process.env.VERCEL === '1' || process.env.DISABLE_HERO_TRAILER === 'true',
   };
